@@ -6,22 +6,26 @@ frappe.ui.form.on("Bulk Delete Request", {
         // Add "Start Deletion" button
         if (frm.doc.status === "Draft" || frm.doc.status === "Partial Success") {
             frm.add_custom_button(__("Start Deletion"), function() {
-                // Use frappe.call_doc to call the document method directly
-                frappe.call_doc({
-                    method: "process_deletions",
-                    doc: frm.doc,
-                    freeze: true,
-                    freezeMessage: __("Deleting records..."),
-                    callback: function(r) {
-                        if (!r.exc) {
-                            frappe.msgprint(__("Deletion process completed! Check logs for details."));
-                            frm.refresh();
+                frappe.confirm(__("Are you sure you want to start deleting records?"), function() {
+                    frappe.call({
+                        method: "bulk_deleter.bulk_deleter.bulk_deleter.doctype.bulk_delete_request.bulk_delete_request.api_process_deletions",
+                        args: {
+                            docname: frm.doc.name
+                        },
+                        freeze: true,
+                        freezeMessage: __("Deleting records..."),
+                        callback: function(r) {
+                            if (!r.exc) {
+                                frappe.msgprint(__("Deletion process completed! Check logs for details."));
+                                frm.reload_doc();
+                            } else {
+                                frappe.msgprint(__("Error: ") + r.message);
+                            }
+                        },
+                        error: function(r) {
+                            frappe.msgprint(__("Error: ") + r.message);
                         }
-                    },
-                    error: function(r) {
-                        frappe.msgprint(__("Error: ") + r.message);
-                        frm.refresh();
-                    }
+                    });
                 });
             }).addClass("btn-primary");
         }
@@ -78,8 +82,8 @@ frappe.ui.form.on("Bulk Delete Request", {
                 }
             });
         } else if (frm.doc.excel_file) {
-            // For Excel, we calculate in Python - just set a placeholder
-            frm.set_value("total_records", __("Calculating..."));
+            // For Excel, set a placeholder
+            frm.set_value("total_records", __("Uploaded Excel file"));
         }
     }
 });

@@ -235,3 +235,13 @@ def start_deletion(docname):
     """API endpoint to start deletion process"""
     doc = frappe.get_doc("Bulk Delete Request", docname)
     doc.process_deletions()
+
+@frappe.whitelist()
+def api_process_deletions(docname):
+    """Whitelisted API method to start deletion process"""
+    if not docname:
+        frappe.throw(_("Docname is required"))
+
+    doc = frappe.get_doc("Bulk Delete Request", docname)
+    doc.process_deletions()
+    return {"message": "Deletion process started"}

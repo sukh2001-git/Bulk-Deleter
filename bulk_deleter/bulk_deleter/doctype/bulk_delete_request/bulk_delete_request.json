@@ -100,15 +100,15 @@
    "default": 1,
    "description": "Automatically remove linkages before deleting"
   },
-  {
-   "fieldname": "linkage_strategy",
-   "fieldtype": "Select",
-   "label": "Linkage Strategy",
-   "options": "Delete Links|Unlink Only",
-   "default": "Delete Links",
-   "depends_on": "eval: doc.remove_linkages == 1",
-   "reqd": 1
-  },
+    {
+    "fieldname": "linkage_strategy",
+    "fieldtype": "Select",
+    "label": "Linkage Strategy",
+    "options": "Delete Links\nUnlink Only",
+    "default": "Delete Links",
+    "depends_on": "eval:doc.remove_linkages",
+    "reqd": 1
+    },
   {
    "fieldname": "skip_blocked",
    "fieldtype": "Check",
@@ -120,14 +120,14 @@
    "fieldname": "section_break_7rgt",
    "fieldtype": "Section Break"
   },
-  {
-   "fieldname": "status",
-   "fieldtype": "Select",
-   "label": "Status",
-   "options": "Draft|Queued|Processing|Completed|Partial Success|Failed",
-   "default": "Draft",
-   "read_only": 1
-  },
+    {
+    "fieldname": "status",
+    "fieldtype": "Select",
+    "label": "Status",
+    "options": "Draft\nQueued\nProcessing\nCompleted\nPartial Success\nFailed",
+    "default": "Draft",
+    "read_only": 1
+    },
   {
    "fieldname": "total_records",
    "fieldtype": "Int",

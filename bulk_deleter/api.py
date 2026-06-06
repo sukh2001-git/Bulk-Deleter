@@ -6,10 +6,19 @@ from frappe import _
 
 @frappe.whitelist()
 def process_bulk_delete(docname):
-    """API to start bulk delete process"""
     if not docname:
         frappe.throw(_("Docname is required"))
 
+    frappe.enqueue(
+        "bulk_deleter.bulk_deleter.doctype.bulk_delete_request.bulk_delete_request.run_deletion_job",
+        queue="long",
+        timeout=3600,
+        docname=docname
+    )
+
+    return {"message": "Deletion process queued successfully"}
+
+
+def run_deletion_job(docname):
     doc = frappe.get_doc("Bulk Delete Request", docname)
     doc.process_deletions()
-    return {"message": "Deletion process started"}

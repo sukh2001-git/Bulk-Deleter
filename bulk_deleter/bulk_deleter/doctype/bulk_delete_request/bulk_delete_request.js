@@ -10,13 +10,13 @@ frappe.ui.form.on("Bulk Delete Request", {
                     frappe.call({
                         method: "bulk_deleter.api.process_bulk_delete",
                         args: {
-                            docname: frm.doc.name 
+                            docname: frm.doc.name
                         },
                         freeze: true,
-                        freezeMessage: __("Deleting records..."),
+                        freezeMessage: __("Queuing deletion process..."),
                         callback: function(r) {
                             if (!r.exc) {
-                                frappe.msgprint(__("Deletion process completed! Check logs for details."));
+                                frappe.msgprint(__("Deletion process has been queued. Refresh the form to track status."));  // ← updated
                                 frm.reload_doc();
                             } else {
                                 frappe.msgprint(__("Error: ") + r.message);

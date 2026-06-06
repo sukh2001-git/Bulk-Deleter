@@ -118,7 +118,7 @@ class BulkDeleteRequest(Document):
             wb = openpyxl.load_workbook(self.file_path, read_only=True)
             ws = wb.active
 
-            header_row = list(ws)[self.start_row - 1] if self.start_row <= ws.max_row else []
+            header_row = list(ws)[0]  # ← always row 1 as header
             col_idx = None
             for idx, cell in enumerate(header_row):
                 if cell.value and str(cell.value).strip().lower() == str(self.name_column).strip().lower():
@@ -128,7 +128,7 @@ class BulkDeleteRequest(Document):
             if col_idx is None:
                 frappe.throw(_("Column '{0}' not found in Excel").format(self.name_column))
 
-            for row in range(self.start_row, ws.max_row + 1):
+            for row in range(2, ws.max_row + 1):  # ← always start data from row 2
                 cell = ws.cell(row=row, column=col_idx + 1)
                 if cell.value:
                     records.append(str(cell.value).strip())

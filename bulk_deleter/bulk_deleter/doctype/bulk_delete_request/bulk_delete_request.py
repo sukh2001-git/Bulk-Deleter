@@ -10,29 +10,23 @@ import openpyxl
 
 class BulkDeleteRequest(Document):
     def validate(self):
-        """Validate the bulk delete request"""
         if not self.delete_all_records and not self.excel_file:
             frappe.throw(_("Either upload an Excel file or select 'Delete All Records'"))
-
         self.total_records = self.get_total_record_count()
 
     def get_total_record_count(self):
-        """Get total number of records to delete"""
         if self.delete_all_records:
             return frappe.db.count(self.doctype_name)
-
         if self.excel_file and self.file_path:
             try:
                 wb = openpyxl.load_workbook(self.file_path, read_only=True)
                 ws = wb.active
-                row_count = ws.max_row - self.start_row + 1
-                return max(0, row_count)
+                return max(0, ws.max_row - 1)  # subtract header row
             except:
                 return 0
         return 0
 
     def before_save(self):
-        """Store file path when Excel is uploaded"""
         if self.excel_file:
             try:
                 file_doc = frappe.get_doc("File", {"file_url": self.excel_file})
@@ -42,42 +36,46 @@ class BulkDeleteRequest(Document):
                 pass
 
     def process_deletions(self):
-        """Main method to process deletions"""
-        self.status = "Queued"
+        self.status = "Processing"
+        self.processed_records = 0
+        self.successful_deletions = 0
+        self.failed_deletions = 0
+        self.error_log = ""
         self.save()
         frappe.db.commit()
 
-        try:
-            self.status = "Processing"
-            self.processed_records = 0
-            self.successful_deletions = 0
-            self.failed_deletions = 0
-            self.error_log = ""
-            self.save()
-            frappe.db.commit()
+        # Cache link fields once for the entire job
+        link_fields_cache = self._get_link_fields() if self.remove_linkages else []
+        log_buffer = []  # batch logs
 
+        try:
             records = self.get_records_to_delete()
 
             for idx, record_name in enumerate(records):
                 if self.batch_size and idx >= self.batch_size:
                     break
 
-                result = self.delete_single_record(record_name)
+                result = self.delete_single_record(record_name, link_fields_cache, log_buffer)
 
                 self.processed_records += 1
                 if result.get("success"):
                     self.successful_deletions += 1
                 else:
                     self.failed_deletions += 1
-                    error_msg = f"{record_name}: {result.get('error', 'Unknown error')}\n"
-                    self.error_log = (self.error_log or "") + error_msg
-
+                    self.error_log = (self.error_log or "") + f"{record_name}: {result.get('error', 'Unknown error')}\n"
                     if not self.skip_blocked:
                         frappe.throw(_("Stopping due to blocked record: {0}").format(record_name))
 
-                if idx % 10 == 0:
+                # Save progress every 50 records
+                if idx % 50 == 0:
+                    self._flush_logs(log_buffer)
+                    log_buffer.clear()
                     self.save()
                     frappe.db.commit()
+
+            # Flush remaining logs
+            if log_buffer:
+                self._flush_logs(log_buffer)
 
             if self.failed_deletions > 0 and self.successful_deletions > 0:
                 self.status = "Partial Success"
@@ -97,12 +95,12 @@ class BulkDeleteRequest(Document):
             raise
 
     def get_records_to_delete(self):
-        """Get list of records to delete"""
         if self.delete_all_records:
             return frappe.get_all(
                 self.doctype_name,
                 filters={"name": ["!=", "Administrator"]},
-                pluck="name"
+                pluck="name",
+                limit_page_length=0  # fetch all
             )
 
         records = []
@@ -118,7 +116,7 @@ class BulkDeleteRequest(Document):
             wb = openpyxl.load_workbook(self.file_path, read_only=True)
             ws = wb.active
 
-            header_row = list(ws)[0]  # ← always row 1 as header
+            header_row = list(ws)[0]
             col_idx = None
             for idx, cell in enumerate(header_row):
                 if cell.value and str(cell.value).strip().lower() == str(self.name_column).strip().lower():
@@ -128,7 +126,7 @@ class BulkDeleteRequest(Document):
             if col_idx is None:
                 frappe.throw(_("Column '{0}' not found in Excel").format(self.name_column))
 
-            for row in range(2, ws.max_row + 1):  # ← always start data from row 2
+            for row in range(2, ws.max_row + 1):
                 cell = ws.cell(row=row, column=col_idx + 1)
                 if cell.value:
                     records.append(str(cell.value).strip())
@@ -140,18 +138,31 @@ class BulkDeleteRequest(Document):
 
         return records
 
-    def delete_single_record(self, record_name):
-        """Delete a single record with linkage handling"""
+    def _get_link_fields(self):
+        """Fetch link fields once and cache for the entire job"""
+        try:
+            return frappe.get_all(
+                "DocField",
+                filters={
+                    "options": self.doctype_name,
+                    "fieldtype": ["in", ("Link", "Dynamic Link")]
+                },
+                fields=["parent", "fieldname"]
+            )
+        except:
+            return []
+
+    def delete_single_record(self, record_name, link_fields_cache, log_buffer):
         result = {"success": False, "error": "", "linked_docs": []}
 
         try:
             if not frappe.db.exists(self.doctype_name, record_name):
-                self.create_log(record_name, "Skipped", "Record does not exist")
+                log_buffer.append(self._make_log_entry(record_name, "Skipped", "Record does not exist"))
                 result["success"] = True
                 return result
 
-            if self.remove_linkages:
-                linked = self.find_linked_documents(record_name)
+            if self.remove_linkages and link_fields_cache:
+                linked = self._find_linked_documents(record_name, link_fields_cache)
                 result["linked_docs"] = linked
 
                 for link in linked:
@@ -166,73 +177,71 @@ class BulkDeleteRequest(Document):
                         pass
 
             frappe.delete_doc(self.doctype_name, record_name, force=True)
-
-            self.create_log(record_name, "Success", "", result["linked_docs"])
+            log_buffer.append(self._make_log_entry(record_name, "Success", "", result["linked_docs"]))
             result["success"] = True
 
         except frappe.LinkExistsError as e:
             result["error"] = "Linked documents exist: " + str(e)
-            self.create_log(record_name, "Failed", result["error"])
+            log_buffer.append(self._make_log_entry(record_name, "Failed", result["error"]))
         except Exception as e:
             result["error"] = str(e)
-            self.create_log(record_name, "Failed", result["error"])
+            log_buffer.append(self._make_log_entry(record_name, "Failed", result["error"]))
 
         return result
 
-    def find_linked_documents(self, record_name):
-        """Find all documents linked to this record"""
+    def _find_linked_documents(self, record_name, link_fields_cache):
+        """Use cached link fields instead of querying DB every time"""
         linked = []
-
-        try:
-            link_fields = frappe.get_all(
-                "DocField",
-                filters={
-                    "options": self.doctype_name,
-                    "fieldtype": ["in", ("Link", "Dynamic Link")]
-                },
-                fields=["parent", "fieldname"]
-            )
-
-            for field in link_fields:
-                try:
-                    linked_docs = frappe.get_all(
-                        field.parent,
-                        filters={field.fieldname: record_name},
-                        fields=["name"]
-                    )
-                    for doc in linked_docs:
-                        linked.append({
-                            "doctype": field.parent,
-                            "name": doc.name,
-                            "field": field.fieldname
-                        })
-                except:
-                    continue
-        except:
-            pass
-
+        for field in link_fields_cache:
+            try:
+                linked_docs = frappe.get_all(
+                    field.parent,
+                    filters={field.fieldname: record_name},
+                    fields=["name"]
+                )
+                for doc in linked_docs:
+                    linked.append({
+                        "doctype": field.parent,
+                        "name": doc.name,
+                        "field": field.fieldname
+                    })
+            except:
+                continue
         return linked
 
-    def create_log(self, record_name, status, reason, linked_docs=None):
-        """Create a log entry"""
+    def _make_log_entry(self, record_name, status, reason, linked_docs=None):
+        """Build a log dict for bulk insert"""
+        return {
+            "name": frappe.generate_hash(length=10),
+            "request": self.name,
+            "doctype_name": self.doctype_name,
+            "record_name": record_name,
+            "status": status,
+            "reason": reason,
+            "linked_docs": json.dumps(linked_docs) if linked_docs else "",
+            "deleted_by": frappe.session.user,
+            "creation": frappe.utils.now(),
+            "modified": frappe.utils.now(),
+            "owner": frappe.session.user,
+            "modified_by": frappe.session.user,
+        }
+
+    def _flush_logs(self, log_buffer):
+        """Bulk insert all buffered logs in one DB call"""
+        if not log_buffer:
+            return
         try:
-            log = frappe.get_doc({
-                "doctype": "Bulk Delete Log",
-                "naming_series": "BDL-.####",
-                "request": self.name,
-                "doctype_name": self.doctype_name,
-                "record_name": record_name,
-                "status": status,
-                "reason": reason,
-                "linked_docs": json.dumps(linked_docs) if linked_docs else "",
-                "deleted_by": frappe.session.user
-            })
-            log.insert()
-        except:
-            pass
+            frappe.db.bulk_insert(
+                "Bulk Delete Log",
+                fields=list(log_buffer[0].keys()),
+                values=[list(entry.values()) for entry in log_buffer],
+                ignore_duplicates=True
+            )
+        except Exception as e:
+            frappe.log_error(str(e), "Bulk Delete Log Insert Failed")
 
 
 def run_deletion_job(docname):
+    """Background job to process deletions"""
     doc = frappe.get_doc("Bulk Delete Request", docname)
     doc.process_deletions()
-

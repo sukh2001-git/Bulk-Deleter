@@ -231,3 +231,8 @@ class BulkDeleteRequest(Document):
         except:
             pass
 
+
+def run_deletion_job(docname):
+    doc = frappe.get_doc("Bulk Delete Request", docname)
+    doc.process_deletions()
+

@@ -17,8 +17,3 @@ def process_bulk_delete(docname):
     )
 
     return {"message": "Deletion process queued successfully"}
-
-
-def run_deletion_job(docname):
-    doc = frappe.get_doc("Bulk Delete Request", docname)
-    doc.process_deletions()

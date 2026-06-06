@@ -7,8 +7,11 @@ frappe.ui.form.on("Bulk Delete Request", {
         if (frm.doc.status === "Draft" || frm.doc.status === "Partial Success") {
             frm.add_custom_button(__("Start Deletion"), function() {
                 frappe.confirm(__("Are you sure you want to start deleting records?"), function() {
-                    frm.call({
+                    frappe.call({
                         method: "bulk_deleter.api.process_bulk_delete",
+                        args: {
+                            docname: frm.doc.name 
+                        },
                         freeze: true,
                         freezeMessage: __("Deleting records..."),
                         callback: function(r) {
@@ -18,9 +21,6 @@ frappe.ui.form.on("Bulk Delete Request", {
                             } else {
                                 frappe.msgprint(__("Error: ") + r.message);
                             }
-                        },
-                        error: function(r) {
-                            frappe.msgprint(__("Error: ") + r.message);
                         }
                     });
                 });

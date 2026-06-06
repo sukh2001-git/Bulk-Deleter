@@ -8,7 +8,7 @@ frappe.ui.form.on("Bulk Delete Request", {
             frm.add_custom_button(__("Start Deletion"), function() {
                 frappe.confirm(__("Are you sure you want to start deleting records?"), function() {
                     frappe.call({
-                        method: "api_process_deletions",
+                        method: "bulk_deleter.doctype.bulk_delete_request.bulk_delete_request.api_process_deletions",
                         args: {
                             docname: frm.doc.name
                         },

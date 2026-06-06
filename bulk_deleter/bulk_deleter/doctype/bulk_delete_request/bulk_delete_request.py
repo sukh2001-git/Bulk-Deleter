@@ -16,12 +16,18 @@ class BulkDeleteRequest(Document):
 
     def get_total_record_count(self):
         if self.delete_all_records:
-            return frappe.db.count(self.doctype_name)
+            count = frappe.db.count(self.doctype_name)
+            if self.batch_size:
+                return min(count, self.batch_size)
+            return count
         if self.excel_file and self.file_path:
             try:
                 wb = openpyxl.load_workbook(self.file_path, read_only=True)
                 ws = wb.active
-                return max(0, ws.max_row - 1)  # subtract header row
+                count = max(0, ws.max_row - 1)
+                if self.batch_size:
+                    return min(count, self.batch_size)
+                return count
             except:
                 return 0
         return 0
@@ -36,6 +42,8 @@ class BulkDeleteRequest(Document):
                 pass
 
     def process_deletions(self):
+        frappe.log_error("process_deletions started", f"Bulk Delete Start | {self.name} | doctype: {self.doctype_name} | batch_size: {self.batch_size}")
+
         self.status = "Processing"
         self.processed_records = 0
         self.successful_deletions = 0
@@ -44,17 +52,16 @@ class BulkDeleteRequest(Document):
         self.save()
         frappe.db.commit()
 
-        # Cache link fields once for the entire job
         link_fields_cache = self._get_link_fields() if self.remove_linkages else []
-        log_buffer = []  # batch logs
+        frappe.log_error("Link fields fetched", f"Bulk Delete | {self.name} | link_fields: {json.dumps(link_fields_cache)}")
+
+        log_buffer = []
 
         try:
             records = self.get_records_to_delete()
+            frappe.log_error("Records fetched", f"Bulk Delete | {self.name} | total: {len(records)}")
 
             for idx, record_name in enumerate(records):
-                if self.batch_size and idx >= self.batch_size:
-                    break
-
                 result = self.delete_single_record(record_name, link_fields_cache, log_buffer)
 
                 self.processed_records += 1
@@ -66,14 +73,13 @@ class BulkDeleteRequest(Document):
                     if not self.skip_blocked:
                         frappe.throw(_("Stopping due to blocked record: {0}").format(record_name))
 
-                # Save progress every 50 records
                 if idx % 50 == 0:
+                    frappe.log_error("Checkpoint", f"Bulk Delete | {self.name} | processed: {idx + 1} | success: {self.successful_deletions} | failed: {self.failed_deletions}")
                     self._flush_logs(log_buffer)
                     log_buffer.clear()
                     self.save()
                     frappe.db.commit()
 
-            # Flush remaining logs
             if log_buffer:
                 self._flush_logs(log_buffer)
 
@@ -84,10 +90,12 @@ class BulkDeleteRequest(Document):
             else:
                 self.status = "Completed"
 
+            frappe.log_error("process_deletions completed", f"Bulk Delete Done | {self.name} | status: {self.status} | success: {self.successful_deletions} | failed: {self.failed_deletions}")
             self.save()
             frappe.db.commit()
 
         except Exception as e:
+            frappe.log_error("process_deletions exception", frappe.get_traceback())
             self.status = "Failed"
             self.error_log = (self.error_log or "") + str(e)
             self.save()
@@ -96,12 +104,15 @@ class BulkDeleteRequest(Document):
 
     def get_records_to_delete(self):
         if self.delete_all_records:
-            return frappe.get_all(
-                self.doctype_name,
-                filters={"name": ["!=", "Administrator"]},
-                pluck="name",
-                limit_page_length=0  # fetch all
-            )
+            query = """
+                SELECT name FROM `tab{doctype}`
+                WHERE name != 'Administrator'
+            """.format(doctype=self.doctype_name)
+
+            if self.batch_size:
+                query += " LIMIT {0}".format(int(self.batch_size))
+
+            return frappe.db.sql_list(query)
 
         records = []
         if not self.file_path or not os.path.exists(self.file_path):
@@ -131,6 +142,10 @@ class BulkDeleteRequest(Document):
                 if cell.value:
                     records.append(str(cell.value).strip())
 
+            # Apply batch size limit after reading Excel
+            if self.batch_size:
+                records = records[:int(self.batch_size)]
+
         except frappe.exceptions.ValidationError:
             raise
         except Exception as e:
@@ -139,7 +154,6 @@ class BulkDeleteRequest(Document):
         return records
 
     def _get_link_fields(self):
-        """Fetch link fields once and cache for the entire job"""
         try:
             return frappe.get_all(
                 "DocField",
@@ -156,7 +170,11 @@ class BulkDeleteRequest(Document):
         result = {"success": False, "error": "", "linked_docs": []}
 
         try:
-            if not frappe.db.exists(self.doctype_name, record_name):
+            exists = frappe.db.sql("""
+                SELECT name FROM `tab{doctype}` WHERE name = %s LIMIT 1
+            """.format(doctype=self.doctype_name), record_name)
+
+            if not exists:
                 log_buffer.append(self._make_log_entry(record_name, "Skipped", "Record does not exist"))
                 result["success"] = True
                 return result
@@ -168,49 +186,58 @@ class BulkDeleteRequest(Document):
                 for link in linked:
                     try:
                         if self.linkage_strategy == "Delete Links":
-                            frappe.delete_doc(link.get("doctype"), link.get("name"), force=True)
+                            frappe.db.sql("""
+                                DELETE FROM `tab{doctype}` WHERE name = %s
+                            """.format(doctype=link.get("doctype")), link.get("name"))
                         else:
-                            doc = frappe.get_doc(link.get("doctype"), link.get("name"))
-                            setattr(doc, link.get("field"), None)
-                            doc.save()
-                    except:
-                        pass
+                            frappe.db.sql("""
+                                UPDATE `tab{doctype}` SET `{field}` = NULL
+                                WHERE name = %s
+                            """.format(
+                                doctype=link.get("doctype"),
+                                field=link.get("field")
+                            ), link.get("name"))
+                    except Exception as e:
+                        frappe.log_error("Link handling error", f"Bulk Delete | record: {record_name} | link: {link} | error: {str(e)}")
 
-            frappe.delete_doc(self.doctype_name, record_name, force=True)
+            frappe.db.sql("""
+                DELETE FROM `tab{doctype}` WHERE name = %s
+            """.format(doctype=self.doctype_name), record_name)
+
             log_buffer.append(self._make_log_entry(record_name, "Success", "", result["linked_docs"]))
             result["success"] = True
 
-        except frappe.LinkExistsError as e:
-            result["error"] = "Linked documents exist: " + str(e)
-            log_buffer.append(self._make_log_entry(record_name, "Failed", result["error"]))
         except Exception as e:
+            frappe.log_error("Record delete error", f"Bulk Delete | record: {record_name} | error: {frappe.get_traceback()}")
             result["error"] = str(e)
             log_buffer.append(self._make_log_entry(record_name, "Failed", result["error"]))
 
         return result
 
     def _find_linked_documents(self, record_name, link_fields_cache):
-        """Use cached link fields instead of querying DB every time"""
         linked = []
         for field in link_fields_cache:
             try:
-                linked_docs = frappe.get_all(
-                    field.parent,
-                    filters={field.fieldname: record_name},
-                    fields=["name"]
-                )
-                for doc in linked_docs:
+                results = frappe.db.sql("""
+                    SELECT name FROM `tab{doctype}`
+                    WHERE `{fieldname}` = %s
+                """.format(
+                    doctype=field.get("parent"),
+                    fieldname=field.get("fieldname")
+                ), record_name, as_dict=True)
+
+                for row in results:
                     linked.append({
-                        "doctype": field.parent,
-                        "name": doc.name,
-                        "field": field.fieldname
+                        "doctype": field.get("parent"),
+                        "name": row.name,
+                        "field": field.get("fieldname")
                     })
-            except:
+            except Exception as e:
+                frappe.log_error("Find linked docs error", f"Bulk Delete | field: {field} | error: {str(e)}")
                 continue
         return linked
 
     def _make_log_entry(self, record_name, status, reason, linked_docs=None):
-        """Build a log dict for bulk insert"""
         return {
             "name": frappe.generate_hash(length=10),
             "request": self.name,
@@ -227,7 +254,6 @@ class BulkDeleteRequest(Document):
         }
 
     def _flush_logs(self, log_buffer):
-        """Bulk insert all buffered logs in one DB call"""
         if not log_buffer:
             return
         try:
@@ -238,7 +264,7 @@ class BulkDeleteRequest(Document):
                 ignore_duplicates=True
             )
         except Exception as e:
-            frappe.log_error(str(e), "Bulk Delete Log Insert Failed")
+            frappe.log_error("Log flush error", f"Bulk Delete | error: {str(e)}")
 
 
 def run_deletion_job(docname):

@@ -231,15 +231,3 @@ class BulkDeleteRequest(Document):
         except:
             pass
 
-    @frappe.whitelist()
-    def api_process_deletions(self):
-        """Whitelisted API method to start deletion process"""
-        self.process_deletions()
-        return {"message": "Deletion process started"}
-        
-
-def start_deletion(docname):
-    """API endpoint to start deletion process"""
-    doc = frappe.get_doc("Bulk Delete Request", docname)
-    doc.process_deletions()
-

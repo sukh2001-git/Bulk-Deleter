@@ -7,11 +7,8 @@ frappe.ui.form.on("Bulk Delete Request", {
         if (frm.doc.status === "Draft" || frm.doc.status === "Partial Success") {
             frm.add_custom_button(__("Start Deletion"), function() {
                 frappe.confirm(__("Are you sure you want to start deleting records?"), function() {
-                    frappe.call({
-                        method: "bulk_deleter.doctype.bulk_delete_request.bulk_delete_request.api_process_deletions",
-                        args: {
-                            docname: frm.doc.name
-                        },
+                    frm.call({
+                        method: "api_process_deletions",
                         freeze: true,
                         freezeMessage: __("Deleting records..."),
                         callback: function(r) {

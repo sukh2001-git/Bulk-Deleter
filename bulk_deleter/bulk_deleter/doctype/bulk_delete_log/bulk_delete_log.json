@@ -1,0 +1,114 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-06 15:48:50.521634",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "request",
+  "doctype_name",
+  "record_name",
+  "column_break_bh1d",
+  "status",
+  "reason",
+  "section_break_5a9v",
+  "linked_docs",
+  "deleted_by",
+  "creation"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "BDL-.####",
+   "default": "BDL-.####",
+   "reqd": 1
+  },
+  {
+   "fieldname": "request",
+   "fieldtype": "Link",
+   "label": "Bulk Delete Request",
+   "options": "Bulk Delete Request"
+  },
+  {
+   "fieldname": "doctype_name",
+   "fieldtype": "Link",
+   "label": "DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "record_name",
+   "fieldtype": "Data",
+   "label": "Record Name"
+  },
+  {
+   "fieldname": "column_break_bh1d",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Success|Failed|Skipped",
+   "default": "Success",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason"
+  },
+  {
+   "fieldname": "section_break_5a9v",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "linked_docs",
+   "fieldtype": "Small Text",
+   "label": "Linked Documents",
+   "options": "Text Editor",
+   "read_only": 1
+  },
+  {
+   "fieldname": "deleted_by",
+   "fieldtype": "Link",
+   "label": "Deleted By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "creation",
+   "fieldtype": "Datetime",
+   "label": "Deleted At",
+   "read_only": 1
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-06 15:48:50.521634",
+ "modified_by": "Administrator",
+ "module": "Bulk Deleter",
+ "name": "Bulk Delete Log",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

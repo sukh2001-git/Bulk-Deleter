@@ -1,0 +1,201 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-06-06 15:48:33.278103",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "doctype_name",
+  "excel_file",
+  "file_path",
+  "column_break_lktj",
+  "delete_all_records",
+  "batch_size",
+  "start_row",
+  "name_column",
+  "section_break_cm5h",
+  "remove_linkages",
+  "linkage_strategy",
+  "skip_blocked",
+  "section_break_7rgt",
+  "status",
+  "total_records",
+  "processed_records",
+  "successful_deletions",
+  "failed_deletions",
+  "column_break_fd6k",
+  "error_log",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Naming Series",
+   "options": "BD-.####",
+   "reqd": 1,
+   "default": "BD-.####"
+  },
+  {
+   "fieldname": "doctype_name",
+   "fieldtype": "Link",
+   "label": "DocType to Delete",
+   "options": "DocType",
+   "reqd": 1,
+   "description": "Select the DocType whose records you want to delete"
+  },
+  {
+   "fieldname": "excel_file",
+   "fieldtype": "Attach",
+   "label": "Excel File",
+   "options": "excel",
+   "description": "Upload Excel file with column containing record names/IDs"
+  },
+  {
+   "fieldname": "file_path",
+   "fieldtype": "Data",
+   "label": "File Path",
+   "hidden": 1
+  },
+  {
+   "fieldname": "column_break_lktj",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "delete_all_records",
+   "fieldtype": "Check",
+   "label": "Delete All Records",
+   "description": "If checked, all records of the selected DocType will be deleted (ignores Excel file)"
+  },
+  {
+   "fieldname": "batch_size",
+   "fieldtype": "Int",
+   "label": "Batch Size",
+   "default": 100,
+   "description": "Number of records to delete in one run"
+  },
+  {
+   "fieldname": "start_row",
+   "fieldtype": "Int",
+   "label": "Start Row",
+   "default": 2,
+   "description": "Excel row to start reading from (1 = header)"
+  },
+  {
+   "fieldname": "name_column",
+   "fieldtype": "Data",
+   "label": "Name Column",
+   "default": "name",
+   "description": "Excel column header containing record names"
+  },
+  {
+   "fieldname": "section_break_cm5h",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "remove_linkages",
+   "fieldtype": "Check",
+   "label": "Remove Linkages",
+   "default": 1,
+   "description": "Automatically remove linkages before deleting"
+  },
+  {
+   "fieldname": "linkage_strategy",
+   "fieldtype": "Select",
+   "label": "Linkage Strategy",
+   "options": "Delete Links|Unlink Only",
+   "default": "Delete Links",
+   "depends_on": "eval: doc.remove_linkages == 1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "skip_blocked",
+   "fieldtype": "Check",
+   "label": "Skip Blocked Records",
+   "default": 1,
+   "description": "Continue deleting other records if one is blocked"
+  },
+  {
+   "fieldname": "section_break_7rgt",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft|Queued|Processing|Completed|Partial Success|Failed",
+   "default": "Draft",
+   "read_only": 1
+  },
+  {
+   "fieldname": "total_records",
+   "fieldtype": "Int",
+   "label": "Total Records",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "processed_records",
+   "fieldtype": "Int",
+   "label": "Processed",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "successful_deletions",
+   "fieldtype": "Int",
+   "label": "Successful",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "failed_deletions",
+   "fieldtype": "Int",
+   "label": "Failed",
+   "default": 0,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_fd6k",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Small Text",
+   "label": "Error Log",
+   "hidden": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-06-06 15:48:33.278103",
+ "modified_by": "Administrator",
+ "module": "Bulk Deleter",
+ "name": "Bulk Delete Request",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
